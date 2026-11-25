@@ -1,5 +1,5 @@
 // Deliberately insecure lab code. Never use it in a real project.
-const { exec } = require('child_process');
+const dns = require('node:dns').promises;
 const express = require('express');
 const _ = require('lodash');
 const config = require('./config');
@@ -19,20 +19,26 @@ function createApp() {
   });
 
   // Looks up a host name, for example /resolve?host=localhost
-  app.get('/resolve', (req, res) => {
-    const host = req.query.host;
-    exec('nslookup ' + host, (error, stdout) => {
-      if (error) {
-        return res.status(404).json({ error: 'Host not found.' });
-      }
-      res.type('text/plain').send(stdout);
-    });
+  app.get('/resolve', async (req, res) => {
+    const host = String(req.query.host || '');
+    if (!/^[a-z0-9.-]{1,253}$/i.test(host)) {
+      return res.status(400).json({ error: 'Invalid host name.' });
+    }
+    try {
+      const { address } = await dns.lookup(host);
+      res.json({ host, address });
+    } catch {
+      res.status(404).json({ error: 'Host not found.' });
+    }
   });
 
-  // Adds two numbers, for example /calc?a=2&b=3
-  app.get('/calc', (req, res) => {
-    const a = eval(req.query.a);
-    const b = eval(req.query.b);
+  // Adds two numbers, for example /add?a=2&b=3
+  app.get('/add', (req, res) => {
+    const a = Number(req.query.a);
+    const b = Number(req.query.b);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) {
+      return res.status(400).json({ error: 'a and b must be numbers.' });
+    }
     res.json({ result: a + b });
   });
 
